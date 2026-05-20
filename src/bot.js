@@ -3,8 +3,11 @@ const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode-terminal';
 import messageHandler from './messageHandler.js';
 
+const MAX_QR = 3;
 const MAX_TENTATIVAS = 5;
-const INTERVALO_MS = 5000; // 5 segundos entre tentativas
+const INTERVALO_MS = 5000;
+
+let qrCount = 0;
 let tentativas = 0;
 
 const criarCliente = () => new Client({
@@ -20,13 +23,23 @@ const criarCliente = () => new Client({
 let client = criarCliente();
 
 const iniciar = () => {
+
   client.on('qr', (qr) => {
-    console.log('📱 Escaneie o QR Code abaixo com o WhatsApp da ONG:\n');
+    qrCount++;
+
+    if (qrCount > MAX_QR) {
+      console.log('⏱️ QR Code expirou 3 vezes sem ser escaneado. Encerrando...');
+      console.log('💡 Rode novamente: node src/bot.js');
+      process.exit(0);
+    }
+
+    console.log(`📱 QR Code (tentativa ${qrCount} de ${MAX_QR}) — escaneie com o WhatsApp da ONG:\n`);
     qrcode.generate(qr, { small: true });
   });
 
   client.on('ready', () => {
-    tentativas = 0; // reseta o contador ao conectar com sucesso
+    qrCount = 0;
+    tentativas = 0;
     console.log('✅ Bot conectado e pronto para atender!');
   });
 
@@ -36,7 +49,7 @@ const iniciar = () => {
     if (tentativas >= MAX_TENTATIVAS) {
       console.log(`🚫 ${MAX_TENTATIVAS} tentativas sem sucesso. Encerrando.`);
       console.log('💡 Verifique a conexão e reinicie com: node src/bot.js');
-      process.exit(1); // encerra o processo limpo
+      process.exit(1);
     }
 
     tentativas++;
@@ -44,13 +57,15 @@ const iniciar = () => {
 
     await new Promise(r => setTimeout(r, INTERVALO_MS));
 
-    client = criarCliente(); // cria instância nova
-    iniciar();               // reinicia os listeners
+    client = criarCliente();
+    iniciar();
   });
 
   client.on('auth_failure', (msg) => {
     console.log('🔐 Falha de autenticação:', msg);
-    console.log('💡 Delete a pasta auth/ e escaneie o QR Code novamente.');
+    console.log('💡 Delete a pasta auth/ e escaneie o QR Code novamente:');
+    console.log('   rm -rf auth/');
+    console.log('   node src/bot.js');
     process.exit(1);
   });
 
