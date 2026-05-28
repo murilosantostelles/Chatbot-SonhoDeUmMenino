@@ -64,13 +64,22 @@ const iniciar = () => {
   client.on('auth_failure', (msg) => {
     console.log('🔐 Falha de autenticação:', msg);
     console.log('💡 Delete a pasta auth/ e escaneie o QR Code novamente:');
-    console.log('   rm -rf auth/');
-    console.log('   node src/bot.js');
+    console.log('   Windows: rmdir /s /q auth');
+    console.log('   Mac/Linux: rm -rf auth/');
+    console.log('   Depois rode: node src/bot.js');
     process.exit(1);
   });
 
-  client.on('message', (message) => {
-    messageHandler(client, message);
+  client.on('message', async (message) => {
+    try {
+      await messageHandler(client, message);
+    } catch (err) {
+      console.log('⚠️ Erro ao processar mensagem:', err.message);
+    }
+  });
+
+  process.on('unhandledRejection', (err) => {
+    console.log('⚠️ Erro não tratado:', err.message);
   });
 
   client.initialize();

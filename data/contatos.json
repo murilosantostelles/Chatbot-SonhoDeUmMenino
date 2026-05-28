@@ -1,4 +1,26 @@
 {
-    "5532999990000@c.us": 1748000000000,
-    "5511988880000@c.us": 1748100000000
+  "5532999990000@c.us": {
+    "ultimoContato": 1748000000000,
+    "menuAberto": true
+  },
+  "29485135056920@lid": {
+    "ultimoContato": 1779999461274,
+    "menuAberto": false
+  },
+  "120363419129652614@g.us": {
+    "ultimoContato": 1779999465887,
+    "menuAberto": true
+  },
+  "120363423131915233@newsletter": {
+    "ultimoContato": 1779999493397,
+    "menuAberto": true
+  },
+  "120363197042724787@newsletter": {
+    "ultimoContato": 1779999550363,
+    "menuAberto": true
+  },
+  "107185287778351@lid": {
+    "ultimoContato": 1779999829639,
+    "menuAberto": true
+  }
 }
