@@ -1,7 +1,12 @@
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode-terminal';
+import qrcodeWeb from 'qrcode';
+import express from 'express';
 import messageHandler from './messageHandler.js';
+
+const app = express();
+const PORT = process.env.PORT || 3000;
 
 const MAX_QR = 3;
 const MAX_TENTATIVAS = 5;
@@ -9,6 +14,38 @@ const INTERVALO_MS = 5000;
 
 let qrCount = 0;
 let tentativas = 0;
+let qrAtual = null; // guarda o QR Code atual para servir na rota
+
+// Rota de health check — usada pelo cron-job.org para manter o bot acordado
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Rota para visualizar o QR Code pelo navegador
+app.get('/qr', async (req, res) => {
+  if (!qrAtual) {
+    return res.send('<h2>Bot já conectado ou QR Code ainda não gerado. Aguarde.</h2>');
+  }
+  try {
+    const qrImagem = await qrcodeWeb.toDataURL(qrAtual);
+    res.send(`
+      <html>
+        <body style="display:flex;flex-direction:column;align-items:center;font-family:sans-serif;padding:40px">
+          <h2>📱 Escaneie o QR Code com o WhatsApp da ONG</h2>
+          <img src="${qrImagem}" style="width:300px;height:300px"/>
+          <p>Atualize a página se o QR Code expirar.</p>
+        </body>
+      </html>
+    `);
+  } catch (err) {
+    res.send('<h2>Erro ao gerar QR Code. Tente novamente.</h2>');
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`🌐 Servidor rodando na porta ${PORT}`);
+  console.log(`🔗 Acesse /qr para escanear o QR Code`);
+});
 
 const criarCliente = () => new Client({
   authStrategy: new LocalAuth({
@@ -16,7 +53,12 @@ const criarCliente = () => new Client({
   }),
   puppeteer: {
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu'
+    ]
   }
 });
 
@@ -24,22 +66,24 @@ let client = criarCliente();
 
 const iniciar = () => {
 
-  client.on('qr', (qr) => {
+  client.on('qr', async (qr) => {
     qrCount++;
+    qrAtual = qr;
 
     if (qrCount > MAX_QR) {
-      console.log('⏱️ QR Code expirou 3 vezes sem ser escaneado. Encerrando...');
-      console.log('💡 Rode novamente: node src/bot.js');
-      process.exit(0);
+      console.log('⏱️ QR Code expirou 3 vezes. Acesse /qr para tentar novamente.');
+      return;
     }
 
-    console.log(`📱 QR Code (tentativa ${qrCount} de ${MAX_QR}) — escaneie com o WhatsApp da ONG:\n`);
-    qrcode.generate(qr, { small: true });
+    console.log(`📱 QR Code gerado (tentativa ${qrCount} de ${MAX_QR})`);
+    console.log('🔗 Acesse a rota /qr no navegador para escanear');
+    qrcode.generate(qr, { small: true }); // ainda mostra no terminal local
   });
 
   client.on('ready', () => {
     qrCount = 0;
     tentativas = 0;
+    qrAtual = null;
     console.log('✅ Bot conectado e pronto para atender!');
   });
 
@@ -48,7 +92,6 @@ const iniciar = () => {
 
     if (tentativas >= MAX_TENTATIVAS) {
       console.log(`🚫 ${MAX_TENTATIVAS} tentativas sem sucesso. Encerrando.`);
-      console.log('💡 Verifique a conexão e reinicie com: node src/bot.js');
       process.exit(1);
     }
 
@@ -63,10 +106,7 @@ const iniciar = () => {
 
   client.on('auth_failure', (msg) => {
     console.log('🔐 Falha de autenticação:', msg);
-    console.log('💡 Delete a pasta auth/ e escaneie o QR Code novamente:');
-    console.log('   Windows: rmdir /s /q auth');
-    console.log('   Mac/Linux: rm -rf auth/');
-    console.log('   Depois rode: node src/bot.js');
+    console.log('💡 Delete a pasta auth/ e acesse /qr novamente.');
     process.exit(1);
   });
 
