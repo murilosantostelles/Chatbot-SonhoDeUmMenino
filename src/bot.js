@@ -55,8 +55,7 @@ const criarCliente = () => new Client({
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--single-process'
+      '--disable-gpu'
     ]
   }
 });
@@ -91,38 +90,9 @@ const iniciar = () => {
 
     if (tentativas >= MAX_TENTATIVAS) {
       console.log(`🚫 ${MAX_TENTATIVAS} tentativas sem sucesso. Encerrando.`);
-      console.log('💡 Reinicie o serviço no painel do Render.');
+      console.log('💡 Reinicie o bot com: pm2 restart chatbot-ong');
       process.exit(1);
     }
 
     tentativas++;
-    console.log(`🔄 Tentativa ${tentativas} de ${MAX_TENTATIVAS} em ${INTERVALO_MS / 1000}s...`);
-
-    await new Promise(r => setTimeout(r, INTERVALO_MS));
-
-    client = criarCliente();
-    iniciar();
-  });
-
-  client.on('auth_failure', (msg) => {
-    console.log('🔐 Falha de autenticação:', msg);
-    console.log('💡 Acesse /qr novamente para reconectar.');
-    process.exit(1);
-  });
-
-  client.on('message', async (message) => {
-    try {
-      await messageHandler(client, message);
-    } catch (err) {
-      console.log('⚠️ Erro ao processar mensagem:', err.message);
-    }
-  });
-
-  process.on('unhandledRejection', (err) => {
-    console.log('⚠️ Erro não tratado:', err.message);
-  });
-
-  client.initialize();
-};
-
-iniciar();
+    console.log(`🔄 Tentativa ${tentativas} de ${MAX_TENTATI
