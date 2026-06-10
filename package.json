@@ -5,8 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "postinstall": "npx puppeteer browsers install chrome",
-    "start": "npx puppeteer browsers install chrome && node src/bot.js",
+    "start": "node src/bot.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
