@@ -51,7 +51,6 @@ const criarCliente = () => new Client({
   }),
   puppeteer: {
     headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -107,7 +106,7 @@ const iniciar = () => {
 
   client.on('auth_failure', (msg) => {
     console.log('🔐 Falha de autenticação:', msg);
-    console.log('💡 Delete a pasta auth/ e acesse /qr novamente.');
+    console.log('💡 Acesse /qr novamente para reconectar.');
     process.exit(1);
   });
 
