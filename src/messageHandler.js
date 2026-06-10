@@ -36,21 +36,26 @@ const enviarResposta = async (message, texto) => {
 const messageHandler = async (client, message) => {
   if (message.fromMe) return;
 
+  // Ignora mensagens com mais de 1 minuto — evita processar histórico antigo
+  const agora = Math.floor(Date.now() / 1000);
+  const tempoMensagem = message.timestamp;
+  if (agora - tempoMensagem > 60) return;
+
   const texto = message.body.trim().toLowerCase();
   const numero = message.from;
-  const agora = Date.now();
+  const agoraMs = Date.now();
 
   const contatos = carregarContatos();
   const contato = contatos[numero];
 
   const horasPassadas = contato
-    ? (agora - contato.ultimoContato) / (1000 * 60 * 60)
+    ? (agoraMs - contato.ultimoContato) / (1000 * 60 * 60)
     : null;
 
   const ehNovoContato = !contato || horasPassadas >= HORAS_PARA_RENOVAR;
 
   if (ehNovoContato) {
-    contatos[numero] = { ultimoContato: agora, menuAberto: true };
+    contatos[numero] = { ultimoContato: agoraMs, menuAberto: true };
     salvarContatos(contatos);
     await enviarResposta(message, menu);
     return;
