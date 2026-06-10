@@ -14,17 +14,15 @@ const INTERVALO_MS = 5000;
 
 let qrCount = 0;
 let tentativas = 0;
-let qrAtual = null; // guarda o QR Code atual para servir na rota
+let qrAtual = null;
 
-// Rota de health check — usada pelo cron-job.org para manter o bot acordado
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Rota para visualizar o QR Code pelo navegador
 app.get('/qr', async (req, res) => {
   if (!qrAtual) {
-    return res.send('<h2>Bot já conectado ou QR Code ainda não gerado. Aguarde.</h2>');
+    return res.send('<h2>Bot já conectado ou QR Code ainda não gerado. Aguarde e atualize a página.</h2>');
   }
   try {
     const qrImagem = await qrcodeWeb.toDataURL(qrAtual);
@@ -53,11 +51,13 @@ const criarCliente = () => new Client({
   }),
   puppeteer: {
     headless: true,
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
-      '--disable-gpu'
+      '--disable-gpu',
+      '--single-process'
     ]
   }
 });
@@ -77,7 +77,7 @@ const iniciar = () => {
 
     console.log(`📱 QR Code gerado (tentativa ${qrCount} de ${MAX_QR})`);
     console.log('🔗 Acesse a rota /qr no navegador para escanear');
-    qrcode.generate(qr, { small: true }); // ainda mostra no terminal local
+    qrcode.generate(qr, { small: true });
   });
 
   client.on('ready', () => {
@@ -92,6 +92,7 @@ const iniciar = () => {
 
     if (tentativas >= MAX_TENTATIVAS) {
       console.log(`🚫 ${MAX_TENTATIVAS} tentativas sem sucesso. Encerrando.`);
+      console.log('💡 Reinicie o serviço no painel do Render.');
       process.exit(1);
     }
 
