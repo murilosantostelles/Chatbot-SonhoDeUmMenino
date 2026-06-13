@@ -49,6 +49,9 @@ const criarCliente = () => new Client({
   authStrategy: new LocalAuth({
     dataPath: './auth'
   }),
+  webVersionCache: {
+    type: 'none'
+  },
   puppeteer: {
     headless: true,
     args: [
@@ -103,7 +106,7 @@ const iniciar = () => {
 
     if (tentativas >= MAX_TENTATIVAS) {
       console.log(`🚫 ${MAX_TENTATIVAS} tentativas sem sucesso. Encerrando.`);
-      console.log('💡 Reinicie o serviço no painel do Render.');
+      console.log('💡 Reinicie o bot com: pm2 restart chatbot-ong');
       process.exit(1);
     }
 
