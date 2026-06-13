@@ -49,9 +49,6 @@ const criarCliente = () => new Client({
   authStrategy: new LocalAuth({
     dataPath: './auth'
   }),
-  webVersionCache: {
-    type: 'none'
-  },
   puppeteer: {
     headless: true,
     args: [
