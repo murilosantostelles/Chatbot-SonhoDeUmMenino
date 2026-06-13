@@ -1,20 +1,20 @@
-import pkg from 'whatsapp-web.js';
-const { Client, LocalAuth } = pkg;
-import qrcode from 'qrcode-terminal';
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion
+} from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
+import qrcodeTerminal from 'qrcode-terminal';
 import qrcodeWeb from 'qrcode';
 import express from 'express';
+import pino from 'pino';
 import messageHandler from './messageHandler.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const MAX_QR = 3;
-const MAX_TENTATIVAS = 5;
-const INTERVALO_MS = 5000;
-
-let qrCount = 0;
-let tentativas = 0;
 let qrAtual = null;
+let sock = null;
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -45,97 +45,79 @@ app.listen(PORT, () => {
   console.log(`🔗 Acesse /qr para escanear o QR Code`);
 });
 
-const criarCliente = () => new Client({
-  authStrategy: new LocalAuth({
-    dataPath: './auth'
-  }),
-  puppeteer: {
-    headless: true,
-    executablePath: '/snap/bin/chromium',
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--single-process',
-      '--no-zygote',
-      '--disable-extensions',
-      '--disable-software-rasterizer',
-      '--disable-background-networking',
-      '--disable-default-apps',
-      '--disable-sync',
-      '--disable-translate',
-      '--hide-scrollbars',
-      '--metrics-recording-only',
-      '--mute-audio',
-      '--no-first-run',
-      '--safebrowsing-disable-auto-update'
-    ]
-  }
-});
+const conectar = async () => {
+  const { state, saveCreds } = await useMultiFileAuthState('./auth');
+  const { version } = await fetchLatestBaileysVersion();
 
-let client = criarCliente();
+  console.log(`🔧 Usando WhatsApp Web versão ${version.join('.')}`);
 
-const iniciar = () => {
+  sock = makeWASocket({
+    version,
+    auth: state,
+    printQRInTerminal: false,
+    logger: pino({ level: 'silent' }),
+    browser: ['Chatbot ONG', 'Chrome', '1.0.0'],
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 60000,
+    keepAliveIntervalMs: 10000,
+    emitOwnEvents: false,
+    fireInitQueries: true,
+    generateHighQualityLinkPreview: false,
+    syncFullHistory: false,
+    markOnlineOnConnect: false,
+  });
 
-  client.on('qr', async (qr) => {
-    qrCount++;
-    qrAtual = qr;
+  sock.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect, qr } = update;
 
-    if (qrCount > MAX_QR) {
-      console.log('⏱️ QR Code expirou 3 vezes. Acesse /qr para tentar novamente.');
-      return;
+    if (qr) {
+      qrAtual = qr;
+      qrcodeTerminal.generate(qr, { small: true });
+      console.log('📱 QR Code gerado — acesse /qr no navegador para escanear');
     }
 
-    console.log(`📱 QR Code gerado (tentativa ${qrCount} de ${MAX_QR})`);
-    console.log('🔗 Acesse a rota /qr no navegador para escanear');
-    qrcode.generate(qr, { small: true });
-  });
+    if (connection === 'close') {
+      qrAtual = null;
+      const statusCode = (lastDisconnect?.error instanceof Boom)
+        ? lastDisconnect.error.output.statusCode
+        : null;
 
-  client.on('ready', () => {
-    qrCount = 0;
-    tentativas = 0;
-    qrAtual = null;
-    console.log('✅ Bot conectado e pronto para atender!');
-  });
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-  client.on('disconnected', async (reason) => {
-    console.log('❌ Bot desconectado. Motivo:', reason);
+      console.log('❌ Conexão fechada. Motivo:', lastDisconnect?.error?.message);
 
-    if (tentativas >= MAX_TENTATIVAS) {
-      console.log(`🚫 ${MAX_TENTATIVAS} tentativas sem sucesso. Encerrando.`);
-      console.log('💡 Reinicie o bot com: pm2 restart chatbot-ong');
-      process.exit(1);
+      if (shouldReconnect) {
+        console.log('🔄 Reconectando em 5 segundos...');
+        setTimeout(conectar, 5000);
+      } else {
+        console.log('🚫 Deslogado do WhatsApp.');
+        console.log('💡 Delete a pasta auth/ e reinicie: pm2 restart chatbot-ong');
+      }
     }
 
-    tentativas++;
-    console.log(`🔄 Tentativa ${tentativas} de ${MAX_TENTATIVAS} em ${INTERVALO_MS / 1000}s...`);
-
-    await new Promise(r => setTimeout(r, INTERVALO_MS));
-
-    client = criarCliente();
-    iniciar();
-  });
-
-  client.on('auth_failure', (msg) => {
-    console.log('🔐 Falha de autenticação:', msg);
-    console.log('💡 Acesse /qr novamente para reconectar.');
-    process.exit(1);
-  });
-
-  client.on('message', async (message) => {
-    try {
-      await messageHandler(client, message);
-    } catch (err) {
-      console.log('⚠️ Erro ao processar mensagem:', err.message);
+    if (connection === 'open') {
+      qrAtual = null;
+      console.log('✅ Bot conectado e pronto para atender!');
     }
   });
 
-  process.on('unhandledRejection', (err) => {
-    console.log('⚠️ Erro não tratado:', err.message);
-  });
+  sock.ev.on('creds.update', saveCreds);
 
-  client.initialize();
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+
+    for (const message of messages) {
+      try {
+        await messageHandler(sock, message);
+      } catch (err) {
+        console.log('⚠️ Erro ao processar mensagem:', err.message);
+      }
+    }
+  });
 };
 
-iniciar();
+process.on('unhandledRejection', (err) => {
+  console.log('⚠️ Erro não tratado:', err.message);
+});
+
+conectar();
