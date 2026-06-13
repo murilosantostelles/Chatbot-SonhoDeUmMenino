@@ -35,11 +35,12 @@ const enviarResposta = async (message, texto) => {
 
 const messageHandler = async (client, message) => {
   if (message.fromMe) return;
+  if (!message.body) return;
 
-  // Ignora mensagens com mais de 1 minuto — evita processar histórico antigo
+  // Aumentado para 5 minutos para dar tempo ao bot inicializar
   const agora = Math.floor(Date.now() / 1000);
   const tempoMensagem = message.timestamp;
-  if (agora - tempoMensagem > 60) return;
+  if (agora - tempoMensagem > 300) return;
 
   const texto = message.body.trim().toLowerCase();
   const numero = message.from;
