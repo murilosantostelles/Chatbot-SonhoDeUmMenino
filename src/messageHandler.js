@@ -37,11 +37,6 @@ const messageHandler = async (client, message) => {
   if (message.fromMe) return;
   if (!message.body) return;
 
-  // Aumentado para 5 minutos para dar tempo ao bot inicializar
-  const agora = Math.floor(Date.now() / 1000);
-  const tempoMensagem = message.timestamp;
-  if (agora - tempoMensagem > 300) return;
-
   const texto = message.body.trim().toLowerCase();
   const numero = message.from;
   const agoraMs = Date.now();
